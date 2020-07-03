@@ -540,23 +540,24 @@ void batch_apply(at::ArrayRef<Tensor> tensors, int64_t n_batch_dims, const func_
     return;
   }
 
-  std::vector<Tensor> tensors_view;
+  std::vector<Tensor> tensors_squashed_batch_dims;
   for (auto& tensor : tensors) {
-    std::vector<int64_t> tensor_view_sizes = {-1};
+    std::vector<int64_t> tensor_squashed_batch_dims_sizes = {-1};
     for (auto d = n_batch_dims; d < tensor.dim(); ++d) {
-      tensor_view_sizes.push_back(tensor.size(d));
+      tensor_squashed_batch_dims_sizes.push_back(tensor.size(d));
     }
-    auto tensor_squashed_batch_dims = tensor.view(tensor_view_sizes);
-    tensors_view.push_back(tensor_squashed_batch_dims);
+    tensors_squashed_batch_dims.push_back(
+      tensor.view(tensor_squashed_batch_dims_sizes)
+    );
   }
 
   for (
     int64_t input_idx = 0;
-    input_idx < tensors_view[0].size(0);
+    input_idx < tensors_squashed_batch_dims[0].size(0);
     ++input_idx) {
     std::vector<Tensor> input_selected;
-    for (auto& tensor_view : tensors_view) {
-      auto curr_input = tensor_view.select(0, input_idx);
+    for (auto& tensor : tensors_squashed_batch_dims) {
+      auto curr_input = tensor.select(0, input_idx);
       input_selected.push_back(curr_input);
     }
     f(input_selected);
@@ -566,7 +567,6 @@ void batch_apply(at::ArrayRef<Tensor> tensors, int64_t n_batch_dims, const func_
 Tensor matrix_power(const Tensor& matrices, const Tensor& powers) {
   if (matrices.dim() > 2) {
     auto res = at::empty(matrices.sizes(), matrices.options());
-
     batch_apply(
       {res, matrices, powers},
       matrices.dim() - 2,
@@ -577,7 +577,6 @@ Tensor matrix_power(const Tensor& matrices, const Tensor& powers) {
         out.copy_(at::matrix_power(in, n));
       }
     );
-
     return res;
   }
   else {
