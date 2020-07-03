@@ -750,7 +750,6 @@ template <typename scalar_t>
 Tensor mexp_impl(const Tensor& a, std::array<scalar_t, total_n_degs> thetas) {
   auto norm = operator_1_norm(a);
 
-  auto norm_value = norm.template item<scalar_t>();
   constexpr std::array<
     Tensor(*)(const Tensor&),
     total_n_degs - 1> 
@@ -760,7 +759,7 @@ Tensor mexp_impl(const Tensor& a, std::array<scalar_t, total_n_degs> thetas) {
   };
 
   for (int i = 0; i < total_n_degs - 1; ++i) {
-    if (norm_value <= thetas[i]) {
+    if ((norm <= thetas[i]).all().template item<bool>()) {
       return compute_Ts[i](a);
     }
   }
@@ -775,7 +774,7 @@ Tensor mexp_impl(const Tensor& a, std::array<scalar_t, total_n_degs> thetas) {
   return matrix_power(compute_T18<scalar_t>(a_scaled), pow2s);
 }
 
-// matrix exponential of a single matrix
+// matrix exponential
 Tensor mexp(const Tensor& a) {
   if (a.scalar_type() == at::ScalarType::Float) {
     constexpr std::array<float, total_n_degs> thetas_float = {
