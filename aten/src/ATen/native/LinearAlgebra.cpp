@@ -534,7 +534,7 @@ constexpr std::array<float, fact_array_size> fact = {1., 1., 2., 6., 24.};
 // TODO: this implementation is not efficient, it simply iterates over
 // batch elements in a serial for-loop.
 template <typename func_t>
-void batch_apply(at::ArrayRef<Tensor> tensors, int64_t n_batch_dims, const func_t& f) {
+void batch_apply(TensorList tensors, int64_t n_batch_dims, const func_t& f) {
   // no-op if batch is empty
   if (n_batch_dims <= 0) {
     return;
@@ -799,33 +799,6 @@ Tensor mexp(const Tensor& a) {
   }
 }
 
-// Based on:
-//
-// Mathias, Roy. 
-// “A Chain Rule for Matrix Functions and Applications.”
-// SIAM J. Matrix Anal. Appl. 17 (1996): 610-620.
-//
-template <typename func_t>
-Tensor backward_analytic_function_of_a_matrix(
-    const Tensor& self, const Tensor& grad,
-    const func_t& function_of_a_matrix
-  ) {
-  auto self_transposed = self.transpose(-2, -1);
-  auto self_transposed_sizes = self_transposed.sizes().vec();
-  self_transposed_sizes[self.dim() - 2] <<= 1;
-  self_transposed_sizes[self.dim() - 1] <<= 1;
-
-  auto n = self_transposed.size(-1);
-  auto meta_grad = at::zeros(self_transposed_sizes, grad.options());
-  meta_grad.narrow(-2, 0, n).narrow(-1, 0, n).copy_(self_transposed);
-  meta_grad.narrow(-2, n, n).narrow(-1, n, n).copy_(self_transposed);
-  meta_grad.narrow(-2, 0, n).narrow(-1, n, n).copy_(grad);
-
-  auto grad_input = function_of_a_matrix(meta_grad)
-    .narrow(-2, 0, n).narrow(-1, n, n);
-  return grad_input;
-}
-
 };
 
 // Computes the matrix exponential for a given batch of squared matrices.
@@ -866,15 +839,6 @@ Tensor matrix_exp(const Tensor& a) {
     );
     return res;
   }
-}
-
-Tensor matrix_exp_backward(const Tensor& self, const Tensor& grad) {
-  return backward_analytic_function_of_a_matrix(
-    self, grad,
-    [](const Tensor& a) {
-      return a.matrix_exp();
-    }
-  );
 }
 
 Tensor matrix_power(const Tensor& a, int64_t n) {

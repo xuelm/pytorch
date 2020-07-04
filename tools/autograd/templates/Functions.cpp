@@ -2722,6 +2722,47 @@ Tensor index_backward(Tensor zeros_like_self, TensorList indices, const Tensor& 
    return at::_index_put_impl_(zeros_like_self, indices, grad, true, true);
 }
 
+
+namespace {
+
+// Based on:
+//
+// Mathias, Roy. 
+// “A Chain Rule for Matrix Functions and Applications.”
+// SIAM J. Matrix Anal. Appl. 17 (1996): 610-620.
+//
+template <typename func_t>
+Tensor backward_analytic_function_of_a_matrix(
+    const Tensor& self, const Tensor& grad,
+    const func_t& function_of_a_matrix
+  ) {
+  auto self_transposed = self.transpose(-2, -1);
+  auto self_transposed_sizes = self_transposed.sizes().vec();
+  self_transposed_sizes[self.dim() - 2] <<= 1;
+  self_transposed_sizes[self.dim() - 1] <<= 1;
+
+  auto n = self_transposed.size(-1);
+  auto meta_grad = at::zeros(self_transposed_sizes, grad.options());
+  meta_grad.narrow(-2, 0, n).narrow(-1, 0, n).copy_(self_transposed);
+  meta_grad.narrow(-2, n, n).narrow(-1, n, n).copy_(self_transposed);
+  meta_grad.narrow(-2, 0, n).narrow(-1, n, n).copy_(grad);
+
+  auto grad_input = function_of_a_matrix(meta_grad)
+    .narrow(-2, 0, n).narrow(-1, n, n);
+  return grad_input;
+}
+
+}
+
+Tensor matrix_exp_backward(const Tensor& self, const Tensor& grad) {
+  return backward_analytic_function_of_a_matrix(
+    self, grad,
+    [](const Tensor& a) {
+      return a.matrix_exp();
+    }
+  );
+}
+
 Tensor _cudnn_ctc_loss_backward(const Tensor& grad_out, const Tensor& loss, const Tensor& raw_grad, bool zero_infinity) {
   if (zero_infinity) {
     return at::where(
