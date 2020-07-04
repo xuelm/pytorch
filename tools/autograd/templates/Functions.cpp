@@ -2722,9 +2722,6 @@ Tensor index_backward(Tensor zeros_like_self, TensorList indices, const Tensor& 
    return at::_index_put_impl_(zeros_like_self, indices, grad, true, true);
 }
 
-
-namespace {
-
 // Based on:
 //
 // Mathias, Roy. 
@@ -2750,8 +2747,6 @@ Tensor backward_analytic_function_of_a_matrix(
   auto grad_input = function_of_a_matrix(meta_grad)
     .narrow(-2, 0, n).narrow(-1, n, n);
   return grad_input;
-}
-
 }
 
 Tensor matrix_exp_backward(const Tensor& self, const Tensor& grad) {
